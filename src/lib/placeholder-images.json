@@ -1,0 +1,41 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "user1",
+      "description": "Avatar for user Alice",
+      "imageUrl": "https://i.pravatar.cc/150?u=user1",
+      "imageHint": "woman face"
+    },
+    {
+      "id": "user2",
+      "description": "Avatar for user Bob",
+      "imageUrl": "https://i.pravatar.cc/150?u=user2",
+      "imageHint": "man face"
+    },
+    {
+      "id": "user3",
+      "description": "Avatar for user Charlie",
+      "imageUrl": "https://i.pravatar.cc/150?u=user3",
+      "imageHint": "person face"
+    },
+    {
+      "id": "user4",
+      "description": "Avatar for user Diana",
+      "imageUrl": "https://i.pravatar.cc/150?u=user4",
+      "imageHint": "woman portrait"
+    },
+    {
+      "id": "user5",
+      "description": "Avatar for user Eve",
+      "imageUrl": "https://i.pravatar.cc/150?u=user5",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "user6",
+      "description": "Avatar for user Frank",
+      "imageUrl": "https://i.pravatar.cc/150?u=user6",
+      "imageHint": "man portrait"
+    }
+  ]
+}
