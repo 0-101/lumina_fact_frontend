@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Users, Search, Tag, Megaphone, ShieldCheck, Plus } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Users, Search, Tag, Megaphone, ShieldCheck, Plus, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ClaimCard } from '@/components/claim-card';
 import { DiscussionPostCard } from '@/components/discussion-post-card';
 import { CreatePostDialog } from '@/components/create-post-dialog';
-import { mockClaims, mockPosts } from '@/lib/mock-data';
+import { mockClaims } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 import type { VerifiedClaim, Post } from '@/lib/types';
 import { useUser } from '@/context/user-context';
 
@@ -19,6 +20,30 @@ export default function CommunityPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('claims');
   const [isCreatePostOpen, setCreatePostOpen] = useState(false);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load posts on component mount
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        setLoading(true);
+        const result = await apiClient.getPosts();
+        if (result.success && result.data) {
+          setPosts(result.data);
+        } else {
+          setError(result.error || 'Failed to load posts');
+        }
+      } catch (err) {
+        setError('Failed to load posts');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPosts();
+  }, []);
 
   const allClaimTags = useMemo(() => {
     const tags = new Set<string>();
@@ -28,9 +53,9 @@ export default function CommunityPage() {
 
   const allDiscussionTags = useMemo(() => {
     const tags = new Set<string>();
-    mockPosts.forEach(item => item.tags.forEach(tag => tags.add(tag)));
+    posts.forEach(item => item.tags.forEach(tag => tags.add(tag)));
     return Array.from(tags);
-  }, []);
+  }, [posts]);
 
   const filteredClaims = useMemo(() => {
     return mockClaims.filter(claim => {
@@ -41,12 +66,12 @@ export default function CommunityPage() {
   }, [selectedTag, searchTerm]);
 
   const filteredDiscussions = useMemo(() => {
-    return mockPosts.filter(post => {
+    return posts.filter(post => {
       const tagMatch = selectedTag ? post.tags.includes(selectedTag) : true;
       const searchMatch = searchTerm ? post.content.toLowerCase().includes(searchTerm.toLowerCase()) : true;
       return tagMatch && searchMatch;
     });
-  }, [selectedTag, searchTerm]);
+  }, [posts, selectedTag, searchTerm]);
   
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -54,9 +79,25 @@ export default function CommunityPage() {
     setSearchTerm('');
   }
 
-  const handlePostSubmit = (newPost: { content: string; tags: string }) => {
-    // In a real app, you would send this to your backend
-    console.log('New Post Submitted:', newPost);
+  const handlePostSubmit = async (newPost: { content: string; tags: string }) => {
+    if (!user) return;
+    
+    try {
+      const result = await apiClient.createPost({
+        content: newPost.content,
+        tags: newPost.tags.split(',').map(tag => tag.trim()),
+        userId: user.id
+      });
+      
+      if (result.success && result.data) {
+        setPosts(prev => [result.data!, ...prev]);
+        setCreatePostOpen(false);
+      } else {
+        setError(result.error || 'Failed to create post');
+      }
+    } catch (err) {
+      setError('Failed to create post');
+    }
   };
 
   const renderTagFilters = (tags: string[]) => (
@@ -133,9 +174,32 @@ export default function CommunityPage() {
               {renderTagFilters(allDiscussionTags)}
             </div>
             <main className="max-w-4xl mx-auto space-y-8">
-                {filteredDiscussions.map((post) => (
-                <DiscussionPostCard key={post.post_id} post={post} />
-                ))}
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">Loading discussions...</span>
+                </div>
+              ) : error ? (
+                <div className="text-center py-12 text-red-500">
+                  <p>Error: {error}</p>
+                  <Button 
+                    onClick={() => window.location.reload()} 
+                    className="mt-4"
+                    variant="outline"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : filteredDiscussions.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No discussions found. Be the first to start a conversation!</p>
+                </div>
+              ) : (
+                filteredDiscussions.map((post) => (
+                  <DiscussionPostCard key={post.post_id} post={post} />
+                ))
+              )}
             </main>
         </TabsContent>
       </Tabs>

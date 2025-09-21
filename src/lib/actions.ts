@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import type { VerificationResult } from './types';
-import { verifyClaim, type VerifyClaimInput } from '@/ai/flows/verify-claim-flow';
+import { api, withErrorHandling } from './api';
 
 const claimSchema = z.object({
   claimText: z.string().optional(),
@@ -10,7 +10,6 @@ const claimSchema = z.object({
   claimUrl: z.string().url().optional().or(z.literal('')),
   claimFile: z.instanceof(File).optional(),
 });
-
 
 type ActionResponse = {
   success: boolean;
@@ -39,7 +38,6 @@ async function fileToDataURI(file: File): Promise<string> {
     return `data:${file.type};base64,${buffer.toString('base64')}`;
 }
 
-
 export async function verifyClaimAction(
   formData: FormData
 ): Promise<ActionResponse> {
@@ -59,32 +57,37 @@ export async function verifyClaimAction(
 
     const { claimText, claimUrl, claimFile } = parsedData.data;
 
-
     if (!claimText && !claimUrl && (!claimFile || claimFile.size === 0)) {
       return { success: false, error: 'Please provide a claim, URL, or a file.' };
     }
     
-    const flowInput: VerifyClaimInput = {
+    const apiInput = {
         claim: claimText || '',
+        urlContent: undefined as string | undefined,
+        mediaDataUri: undefined as string | undefined,
     };
 
     if (claimUrl) {
       try {
         const urlContent = await getUrlContent(claimUrl);
-        flowInput.urlContent = `Content from ${claimUrl}:\n\n${urlContent.substring(0, 5000)}...`; // Limit context size
+        apiInput.urlContent = `Content from ${claimUrl}:\n\n${urlContent.substring(0, 5000)}...`; // Limit context size
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
     }
 
     if (claimFile && claimFile.size > 0) {
-        flowInput.mediaDataUri = await fileToDataURI(claimFile);
+        apiInput.mediaDataUri = await fileToDataURI(claimFile);
     }
 
-    // Call GenAI flow to verify the claim
-    const verificationData = await verifyClaim(flowInput);
-
-    return { success: true, data: verificationData };
+    // Use the centralized API service
+    const result = await withErrorHandling(() => api.verifyClaim(apiInput));
+    
+    if (result.success && result.data) {
+      return { success: true, data: result.data };
+    } else {
+      return { success: false, error: result.error || 'Verification failed' };
+    }
   } catch (error) {
     console.error('Error in verifyClaimAction:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -93,4 +96,33 @@ export async function verifyClaimAction(
       error: `An unexpected error occurred during verification: ${errorMessage}`,
     };
   }
+}
+
+// Additional server actions for other features
+export async function getPostsAction() {
+  return withErrorHandling(() => api.getPosts());
+}
+
+export async function createPostAction(data: { content: string; tags: string[]; userId: string }) {
+  return withErrorHandling(() => api.createPost(data));
+}
+
+export async function getTrendingAction() {
+  return withErrorHandling(() => api.getTrending());
+}
+
+export async function getDailyQuizAction() {
+  return withErrorHandling(() => api.getDailyQuiz());
+}
+
+export async function submitQuizAction(answers: { questionId: string; answer: string }[]) {
+  return withErrorHandling(() => api.submitQuizAnswers(answers));
+}
+
+export async function getUserStatsAction(userId: string) {
+  return withErrorHandling(() => api.getUserStats(userId));
+}
+
+export async function getLeaderboardAction() {
+  return withErrorHandling(() => api.getLeaderboard());
 }

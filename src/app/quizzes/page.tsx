@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Swords, LogIn } from 'lucide-react';
+import { Swords, LogIn, Loader2 } from 'lucide-react';
 import { useUser } from '@/context/user-context';
 import { QuizCard } from '@/components/quiz-card';
 import { StatsCard } from '@/components/stats-card';
 import { Leaderboard } from '@/components/leaderboard';
 import { LoginDialog } from '@/components/login-dialog';
 import { Button } from '@/components/ui/button';
-import { mockQuiz, mockLeaderboard } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 import type { QuizQuestion, User } from '@/lib/types';
 
 export default function QuizzesPage() {
@@ -16,15 +16,38 @@ export default function QuizzesPage() {
   const [isLoginDialogOpen, setLoginDialogOpen] = useState(false);
   const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null);
   const [leaderboard, setLeaderboard] = useState<User[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate fetching data
-    const timer = setTimeout(() => {
-      setQuiz(mockQuiz);
-      setLeaderboard(mockLeaderboard);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    const loadData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const [quizResult, leaderboardResult] = await Promise.all([
+          apiClient.getDailyQuiz(),
+          apiClient.getLeaderboard()
+        ]);
+
+        if (quizResult.success && quizResult.data) {
+          setQuiz(quizResult.data);
+        } else {
+          setError(quizResult.error || 'Failed to load quiz');
+        }
+
+        if (leaderboardResult.success && leaderboardResult.data) {
+          setLeaderboard(leaderboardResult.data);
+        }
+      } catch (err) {
+        setError('Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
 
   if (!user) {
     return (
@@ -57,11 +80,40 @@ export default function QuizzesPage() {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-            {quiz ? <QuizCard questions={quiz} /> : <QuizCard.Skeleton />}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading quiz...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-red-500">
+              <p>Error: {error}</p>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="mt-4"
+                variant="outline"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : quiz ? (
+            <QuizCard questions={quiz} />
+          ) : (
+            <QuizCard.Skeleton />
+          )}
         </div>
         <div className="space-y-8">
-            <StatsCard user={user} />
-            {leaderboard ? <Leaderboard users={leaderboard} currentUser={user} /> : <Leaderboard.Skeleton />}
+          <StatsCard user={user} />
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Loading leaderboard...</span>
+            </div>
+          ) : leaderboard ? (
+            <Leaderboard users={leaderboard} currentUser={user} />
+          ) : (
+            <Leaderboard.Skeleton />
+          )}
         </div>
       </div>
     </div>

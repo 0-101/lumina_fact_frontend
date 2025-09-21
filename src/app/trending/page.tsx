@@ -1,25 +1,49 @@
 'use client';
-import { useState, useMemo } from 'react';
-import { TrendingUp, Tag } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { TrendingUp, Tag, Loader2 } from 'lucide-react';
 import { TrendingCard } from '@/components/trending-card';
-import { mockTrending } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 import type { TrendingItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export default function TrendingPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [trendingItems, setTrendingItems] = useState<TrendingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load trending items on component mount
+  useEffect(() => {
+    const loadTrending = async () => {
+      try {
+        setLoading(true);
+        const result = await apiClient.getTrending();
+        if (result.success && result.data) {
+          setTrendingItems(result.data);
+        } else {
+          setError(result.error || 'Failed to load trending items');
+        }
+      } catch (err) {
+        setError('Failed to load trending items');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTrending();
+  }, []);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    mockTrending.forEach(item => item.tags.forEach(tag => tags.add(tag)));
+    trendingItems.forEach(item => item.tags.forEach(tag => tags.add(tag)));
     return Array.from(tags);
-  }, []);
+  }, [trendingItems]);
 
   const filteredItems = useMemo(() => {
-    if (!selectedTag) return mockTrending;
-    return mockTrending.filter(item => item.tags.includes(selectedTag));
-  }, [selectedTag]);
+    if (!selectedTag) return trendingItems;
+    return trendingItems.filter(item => item.tags.includes(selectedTag));
+  }, [trendingItems, selectedTag]);
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12">
@@ -55,9 +79,32 @@ export default function TrendingPage() {
       </div>
 
       <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredItems.map((item) => (
-          <TrendingCard key={item.id} item={item} />
-        ))}
+        {loading ? (
+          <div className="col-span-full flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="ml-2">Loading trending items...</span>
+          </div>
+        ) : error ? (
+          <div className="col-span-full text-center py-12 text-red-500">
+            <p>Error: {error}</p>
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="mt-4"
+              variant="outline"
+            >
+              Retry
+            </Button>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="col-span-full text-center py-12 text-muted-foreground">
+            <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No trending items found.</p>
+          </div>
+        ) : (
+          filteredItems.map((item) => (
+            <TrendingCard key={item.id} item={item} />
+          ))
+        )}
       </main>
     </div>
   );
